@@ -6,7 +6,7 @@ from astropy.time import Time
 import numpy as np
 
 from pyia.data import GaiaData
-import pystrometry
+from pystrometry import pystrometry
 
 
 def correct_for_proper_motion(gaia_table, target_epoch, verbose=False, ignore_parallax=True):
