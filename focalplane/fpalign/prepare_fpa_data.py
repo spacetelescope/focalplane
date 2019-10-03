@@ -10,35 +10,23 @@ import warnings
 
 import astropy.io.fits as fits
 from astropy.table import Table, vstack
-import astroquery.mast as mast
 from astropy.time import Time
 from astropy.coordinates import SkyCoord
 from astropy import units as u
 from astropy.utils.exceptions import AstropyWarning
-
 from astropy.stats import sigma_clipped_stats
-from photutils import DAOStarFinder, CircularAperture, RectangularAperture
 from astropy.visualization import SqrtStretch, LogStretch
 from astropy.visualization.mpl_normalize import ImageNormalize
+import astroquery.mast as mast
 
 from jwst import datamodels
-
+from photutils import DAOStarFinder, CircularAperture, RectangularAperture
 import pysiaf
-
 from pystortion import crossmatch
-
-from .alignment import AlignmentObservation, compute_idl_to_tel_in_table
-
-
-
-try:
-    # sys.path.append(os.path.join(home_dir, 'astro/code/packages/astrohelpers'))
-    import gaia_helpers
-except ImportError:
-    print('Module gaia_helpers not available')
-
 from scipy.spatial import cKDTree
 
+from .alignment import AlignmentObservation, compute_idl_to_tel_in_table
+from ..utils import correct_for_proper_motion
 
 def select_isolated_sources(extracted_sources, nearest_neighbour_distance_threshold_pix):
     """
@@ -438,7 +426,7 @@ def crossmatch_fpa_data(parameters):
                             with warnings.catch_warnings():
                                 warnings.simplefilter('ignore', AstropyWarning, append=True)
                                 warnings.simplefilter('ignore', UserWarning, append=True)
-                                obs.gaia_catalog = gaia_helpers.correct_for_proper_motion(
+                                obs.gaia_catalog = correct_for_proper_motion(
                                     obs.gaia_catalog,
                                     target_epoch,
                                     verbose=False)
