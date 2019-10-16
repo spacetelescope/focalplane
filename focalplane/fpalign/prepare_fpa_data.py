@@ -435,7 +435,8 @@ def crossmatch_fpa_data(parameters):
                                 obs.gaia_catalog = correct_for_proper_motion(
                                     obs.gaia_catalog,
                                     target_epoch,
-                                    verbose=False)
+                                    verbose=False,
+                                    ignore_parallax=False)
                             obs.gaia_catalog.write(pm_corrected_file, overwrite=True)
                         else:
                             obs.gaia_catalog = Table.read(pm_corrected_file)
