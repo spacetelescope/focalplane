@@ -22,9 +22,7 @@ def test_pm_correction():
         table = Table.read(output_file)
     print('Retrieved {} sources'.format(len(table)))
 
-
     target_epoch = Time(2017, format='jyear')
     corrected_table = correct_for_proper_motion(table, target_epoch)
-    # corrected_table['ra_2017.0', 'dec_2017.0', 'ra_error_2017.0', 'dec_error_2017.0'].pprint()
 
     assert len(corrected_table) == len(table)
