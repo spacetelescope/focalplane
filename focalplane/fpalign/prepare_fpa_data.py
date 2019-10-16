@@ -87,7 +87,10 @@ def crossmatch_fpa_data(parameters):
 
             print('=' * 40)
             fpa_data = Table.read(f)
-            print('Read {} rows from {}'.format(len(fpa_data), f))
+
+            # handle HST FGS case
+            if (parameters['observatory'] == 'HST') & (fpa_data.meta['INSTRUME'] not in parameters['camera_names']):
+                continue
 
             if parameters['observatory'] == 'JWST':
                 pl.close('all')
@@ -219,12 +222,15 @@ def crossmatch_fpa_data(parameters):
             elif parameters['observatory'] == 'HST':
 
 
-                for camera_name in parameters['camera_names']:
-                    if fpa_data.meta['INSTRUME'] != camera_name:
-                        continue
-                    else:
-                        pl.close('all')
-                        print('Loading FPA observations in %s' % f)
+                if 1:
+                    camera_name = fpa_data.meta['INSTRUME']
+                # for camera_name in parameters['camera_names']:
+                #     if fpa_data.meta['INSTRUME'] != camera_name:
+                #         continue
+                #     else:
+                    pl.close('all')
+                    print('Loading FPA observations in %s' % f)
+                    print('Read {} rows from {}'.format(len(fpa_data), f))
 
                     fpa_name_seed = os.path.basename(f).split('.')[0]
 
@@ -399,7 +405,7 @@ def crossmatch_fpa_data(parameters):
                         xmatch_radius_sky = 1 * u.arcsecond
                         rejection_level_sigma = 5
                         retain_best_match = 1
-                        tmp_idx_gaia_cat, tmp_idx_star_cat, d2d, d3d, diff_raStar, diff_de = pystortion.crossmatch.xmatch(
+                        tmp_idx_gaia_cat, tmp_idx_star_cat, d2d, d3d, diff_raStar, diff_de = crossmatch.xmatch(
                             tmp_gaia_cat, tmp_star_cat,
                             xmatch_radius_sky,
                             verbose=0, rejection_level_sigma=rejection_level_sigma,
@@ -524,7 +530,7 @@ def crossmatch_fpa_data(parameters):
                         # verbose = 0
                         # verbose_figures = 0
                         idx_gaia_cat, idx_star_cat, d2d, d3d, diff_raStar, diff_de = \
-                            pystortion.crossmatch.xmatch(gaia_cat, star_cat,
+                            crossmatch.xmatch(gaia_cat, star_cat,
                                                          xmatch_radius,
                                                          rejection_level_sigma,
                                                          verbose=verbose,
@@ -597,6 +603,7 @@ def crossmatch_fpa_data(parameters):
             else:
                 fieldname_dict['reference_catalog']['position_1'] = 'v2_tangent_arcsec'
                 fieldname_dict['reference_catalog']['position_2'] = 'v3_tangent_arcsec'
+
             if 'Name: J/A+A/563/A80/jwstcf' in reference_catalog.meta['comments']:
                 reference_catalog_identifier = 'ID'  # HAWK-I
                 fieldname_dict['reference_catalog']['sigma_position_1'] = 'ra_error_mas'
@@ -1488,54 +1495,38 @@ def jwst_camera_fpa_data(data_dir, pattern, standardized_data_dir, parameters,
 
     return im
 
-def hst_guider_fpa_data(reduced_data_dir, mast_data_dir, pattern, standardized_data_dir, verbose=True):
-    """
-    Generate standardized focal plane alignment data based on HST guider data (FGS1, FGS2, FGS3)
+def hst_guider_fpa_data(reduced_data_dir, mast_data_dir, pattern, standardized_data_dir,
+                        verbose=True):
+    """Generate standardized focal plane alignment data based on HST guider data (FGS1, FGS2, FGS3).
 
-    :param data_dir:
-    :param pattern:
-    :param standardized_data_dir:
-    :param astrometry_uncertainty_mas:
-    :return:
+    Parameters
+    ----------
+    reduced_data_dir
+    mast_data_dir
+    pattern
+    standardized_data_dir
+    verbose
+
+    Returns
+    -------
+
     """
-    # file_list = glob.glob(os.path.join(data_dir, '**/*%s' % pattern))
     file_list = glob.glob(os.path.join(reduced_data_dir, '*{}*'.format(pattern)))
+
     for f in file_list:
 
+        d = Table.read(f, format='ascii.basic', delimiter= ',', guess=False, data_start=2)
         if verbose:
             print('Reading Guider data file: {}'.format(f))
-
-        # d = Table.read(f, format='ascii.basic', delimiter= '\t', guess=False)
-        # d = Table.read(f, format='ascii.basic', delimiter= ',', guess=False)
-        d = Table.read(f, format='ascii.basic', delimiter= ',', guess=False, data_start=2)
-        # d = Table.read(f, format='ascii.fixed_width', delimiter= ' ', guess=False)
-        # d = Table.read(f, format='ascii.basic', guess=False)
-
-        if verbose:
             d.pprint()
-        # d = Table.read(f, format='ascii.basic')
-        # 1/0
+
         # loop over individual FGS frames
         for j, obs_id in enumerate(d['OBS_ID'].data):
 
             # retrieve basic exposure data from MAST
             mast_data = mast.Observations.query_criteria(obs_id=obs_id.upper(), obstype='cal')
-            # if 0:
-            #
-            #     # mast_data = mast.Observations.query_criteria(obs_id=d['obsID'].data)
-            #
-            #     # d = hstack((d, mast_data))
-            #     mast_dir = os.path.join(data_dir, 'FGS/mast')
-            #     if overwrite_mast_files:
-            #         dataProductsByObservation = mast.Observations.get_product_list(mast_data)
-            #         mast.Observations.download_products(dataProductsByObservation, mrp_only=False, download_dir=mast_dir)
-            #
-            #     download_dir = os.path.join(mast_dir, 'mastDownload/HST', obs_id)
-
             download_dir = mast_data_dir
 
-            # a1f_file = glob.glob( os.path.join(download_dir, '*%s'%'_a1f.fits'))[0]
-            # a1f_file = glob.glob( os.path.join(download_dir, '**/**/**/*%s'%'_a1f.fits'))
             a1f_file = glob.glob( os.path.join(download_dir, '**/**/FGS/{}{}.fits'.format(obs_id.lower(), '_a1f')))
             if len(a1f_file) != 1:
                 raise RuntimeError('Identified NO or more than one match for {}'.format(obs_id))
@@ -1550,7 +1541,6 @@ def hst_guider_fpa_data(reduced_data_dir, mast_data_dir, pattern, standardized_d
             fgs_number = np.int(instr.split('FGS')[1])
 
             af_header = fits.getheader(a1f_file.replace('_a1f', '_a%df'%fgs_number))
-            # h = af_header
 
             # read DMF header to get RA/Dec of V1
             dmf_header = fits.getheader(a1f_file.replace('_a1f', '_dmf'))
@@ -1565,7 +1555,6 @@ def hst_guider_fpa_data(reduced_data_dir, mast_data_dir, pattern, standardized_d
             # 1/0
             d2['RA_deg'] = d2['RA']
             d2['Dec_deg'] = d2['DEC']
-
 
             # nelan email dated 20 October 2017:
             # The (x,y) values are corrected for geometric distortion, differential velocity aberration, spacecraft jitter, and spacecraft drift.
@@ -1583,6 +1572,7 @@ def hst_guider_fpa_data(reduced_data_dir, mast_data_dir, pattern, standardized_d
             dmf_keys = 'PA_V3 RA_V1 DEC_V1 DGESTAR SGESTAR'.split()
             for key in dmf_keys:
                 d2.meta[key] = dmf_header[key]
+
             # d2.meta['PA_V3'] = dmf_header['PA_V3'] # / position angle of V3-axis of HST (deg) this is at V2,V3=0,0
             # # see /Users/jsahlmann/jwst/code/github/spacetelescope/mirage/jwst/jwst/lib/set_telescope_pointing.py
             # # V3APERCE=           326.492096 / V3 offset of target from aper fiducial (arcsec)
@@ -1597,10 +1587,6 @@ def hst_guider_fpa_data(reduced_data_dir, mast_data_dir, pattern, standardized_d
 
             epoch_isot = '%sT%s' % (af_header['DATE-OBS'], af_header['TIME-OBS'])
             d2.meta['EPOCH'] = epoch_isot
-            # header2_keys = ['RA_APER', 'DEC_APER', 'PA_APER']
-            # for key in header2_keys:
-            #     d2.meta[key] = h[key]
-
 
             d2.meta['SIAFAPER'] = instr
             aperture = d2.meta['SIAFAPER']
@@ -1624,30 +1610,22 @@ def hst_guider_fpa_data(reduced_data_dir, mast_data_dir, pattern, standardized_d
             # POSTNSTX=   4.755696683602E+03 / position of space telescope x axis (km)
             # EXPSTART=       57855.30789390 / exposure start time (Modified Julian Date)
             for key in 'VELOCSTX VELOCSTY VELOCSTZ VELABBRA V2APERCE V3APERCE POSTNSTX POSTNSTY POSTNSTZ EXPSTART EXPEND PA_V3 RA_V1 DEC_V1'.split():
-                # print('dmf_header: {} = {}'.format(key, dmf_header[key]))
-                # d2.meta[key] = dmf_header[key]
                 d2[key] = dmf_header[key]
-
-
-
-            # if dmf_header['EXPSTART'] == 57855.4404865: # Ed's example file 	Xpos does not seem to match POSTNSTX
-            #     1/0
-
-            # d2['a1f_header'] = a1f_header
-            # d2['dmf_header'] = dmf_header
 
             if j==0:
                 d3 = d2.copy()
             else:
                 d3 = vstack((d3,d2))
-            # 1/0
-
 
         out_file = os.path.join(standardized_data_dir, 'FPA_data_%s_SUPER%s_%s_chip%d_%s_%s_%s.fits' % (
                 telescope, instr, aperture, chip_id, filter, epoch_isot,
                 os.path.basename(f).split('.')[0])).replace(':','-')
-        print('Writing %s' % out_file)
         d3.meta['PROPOSID'] = d2['PROPOSID'][0]
         d3.meta['PROGRAM_VISIT'] = '{}_{}'.format(d3.meta['PROPOSID'], d3.meta['DATAFILE'][4:6])
+
+        # Change the name of the instrument to indicate that these data originate from a combination
+        # of FGS observations
         d3.meta['INSTRUME'] = 'SUPER' + d3.meta['INSTRUME']
+
+        print('Writing %s' % out_file)
         d3.write(out_file, overwrite=True)

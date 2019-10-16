@@ -1512,7 +1512,7 @@ def determine_focal_plane_alignment(obs_collection, parameters):
                             # obs_collection.T['attitude_group'][obs_coll_index] = attitude_group
 
                 # determine corrections to aperture parameters -> focal plane geometric calibration
-                plot_residuals = False
+                # plot_residuals = False
                 plot_residuals = parameters['plot_residuals']
                 # verbose = False
                 verbose = parameters['verbose']
