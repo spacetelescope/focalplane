@@ -65,13 +65,3 @@ install:
 
 script:
     - $MAIN_CMD $SETUP_CMD
-
-deploy:
-  provider: pypi
-  skip_existing: true
-  user: __token__
-  password:
-    secure: i4E66KhDD/MkPTHLDUV6dk2OTqingG9/k2sxctnPeVtml5O7NRjJ0QwZeAannkHuFWCjRZ+BpJ2g4JZ6VL+BBcxifVKcxwxGJ8NfKAPmb9LLuqkLI7wPkSrmjvWuq9MLR3NDq4+oqm8EyvVdvDnTPFsTnnVCg3Y0M4tvfOea3szsZIPYNpjOyOtztHFxqXhda3ZvvdE2N9p926z7qhOLSzl0YB7AOlX1qYzpUT7xWX5LT1/DILGFvee1AOq6tcIUXEfvA1vvMkecZLI/CkUE6aMlWDpM0iaEwnix8GyhT9rAarXWXDakuLmQzGdGCq/T8469lljV5sJMZt8gEMUQumpHFODRL3yW6lLph1vZbWXmS+PgUk5kHf8IB1iQwdSPgOBhNfEtbmTcFQCJLaxRQPdyoEb/lh4ZfVV1WjrghMIUf6YAL4NWPRmiQWgyIREBJsS3li6j7XnRvOigIDJ/MOqHLB/4+YpSnrvNLXJrkQdy+t92FacZQrc0drARia3ImK0avzaV/1WCFnR4aQAyqv/XMGO0yuWQBKAFByeq4WGhi/Dd0ayjUFht6RfHH9S7c3NqfOYxtTsw7CHJozqd6Pi+ybEgi4J/+ITAuE27eWNGeFCyfc7OjlQqsbCLp574nDlJc31v8dQfSYJF2gyXGPEMEJRj7JudTq9zj3oLpbQ=
-  on:
-    branch: master
-    tags: false
