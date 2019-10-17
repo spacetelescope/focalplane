@@ -3,6 +3,7 @@ import os
 from astropy.table import Table
 from astropy.time import Time
 from astroquery.gaia import Gaia
+import pytest
 
 from ..utils import correct_for_proper_motion
 
