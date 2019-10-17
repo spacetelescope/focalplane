@@ -6,9 +6,11 @@ from astroquery.gaia import Gaia
 
 from ..utils import correct_for_proper_motion
 
+ON_TRAVIS = os.environ.get('TRAVIS') == 'true'
+
 local_dir = os.path.dirname(os.path.abspath(__file__))
 
-
+@pytest.mark.skipif(ON_TRAVIS, reason='timeout issue.')
 def test_pm_correction():
     query = """SELECT * FROM gaiadr2.gaia_source AS gaia WHERE gaia.parallax > 200 AND gaia.parallax < 205"""
 
