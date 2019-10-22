@@ -130,7 +130,12 @@ class AlignmentObservationCollection(object):
     def set_basic_properties(self):
         self.n_observations = len(self.observations)
         T = Table()
-        for key in self.observations[0].fpa_data.meta.keys():
+        try:
+            keys = self.observations[0].fpa_data.meta.keys()
+        except IndexError:
+            raise RuntimeError('No observations are available. Probably something went wrong when '
+                               'compiling the list of observations.')
+        for key in keys:
             value_list = []
             for j in range(self.n_observations):
                 if key in self.observations[j].fpa_data.meta.keys():
