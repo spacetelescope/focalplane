@@ -822,6 +822,11 @@ def hst_camera_fpa_data(data_dir, pattern, onepass_extension, standardized_data_
         primary_header = fits.getheader(f, ext=0)
         first_ext_header = fits.getheader(f, ext=1)
 
+        # STS (10/22/2019): Check if header keyword QUALITY includes the value GSFAIL; if so, ignore data set.
+        quality = primary_header['QUALITY']
+        if 'GSFAIL' in quality:
+            continue
+
         # collect meta data
         telescope = primary_header['TELESCOP']
         instr = primary_header['INSTRUME'].strip()
