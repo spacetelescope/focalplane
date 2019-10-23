@@ -245,7 +245,7 @@ class AlignmentObservationCollection(object):
 
             # threshold to separate attitude groups
             break_index = np.where(np.diff(self.T['MJD'][valid_index] * 24) > threshold_hours)[0] + 1
-            if not break_index:
+            if not break_index.any():
                 # only one group
                 self.T['attitude_group'] = 0
             else:
