@@ -636,8 +636,8 @@ def crossmatch_fpa_data(parameters):
 
         pickle.dump((observations), open(parameters['pickle_file'], "wb"))
     else:
+        print('Loading pickled file {}'.format(parameters['pickle_file']))
         observations = pickle.load(open(parameters['pickle_file'], "rb"))
-        print('Loaded pickled file {}'.format(parameters['pickle_file']))
 
     return observations
 

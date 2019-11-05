@@ -295,7 +295,7 @@ def apply_focal_plane_calibration(obs_collection, apertures_to_calibrate, calibr
         if tmp_aperture_name in apertures_to_calibrate:
             calibration_index = np.where((np.int(obs_collection.T['PROPOSID'][tmp_j]) == np.array(calibrated_data['PROPOSID'])) &
                                          (np.array(calibrated_data['AperName']) == tmp_aperture_name) &
-                                         (np.int(obs_collection.T['EPOCHNUMBER'][tmp_j]) == np.array(calibrated_data['EPOCHNUMBER'])))[0]
+                                         (np.int(obs_collection.T['EPOCHNUMBER'][tmp_j]) == np.array(calibrated_data['EPOCHNUMBER']).astype(np.int)))[0]
             print('+++++++++++ APPLYING CALIBRATION +++++++++++')
             if verbose:
                 print('Applying calibration as mean of')
