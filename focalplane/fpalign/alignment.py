@@ -245,9 +245,9 @@ class AlignmentObservationCollection(object):
 
             # threshold to separate attitude groups
             break_index = np.where(np.diff(self.T['MJD'][valid_index] * 24) > threshold_hours)[0] + 1
-            if not break_index.any():
+            if not break_index:
                 # only one group
-                self.T['attitude_group'] = 0
+                self.T['attitude_group'][valid_index] = 0
             else:
                 for index in break_index:
                     self.T['attitude_group'][valid_index[0:index]] = 0
@@ -1929,7 +1929,6 @@ def evaluate(obs_collection, parameters, make_summary_figures=True, save_plot=Tr
             unique_aperture_names_all = np.unique(obs_collection.T['AperName'])
 
             for i in range(obs_collection.n_observations):
-
                 visit_group_index = [j for j in range(len(visit_groups)) if obs_collection.T['group_id'][i] in visit_groups[j]][0]
                 obs = obs_collection.observations[i]
                 use_pseudo_fgs = False
