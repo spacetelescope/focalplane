@@ -245,10 +245,12 @@ class AlignmentObservationCollection(object):
 
             # threshold to separate attitude groups
             break_index = np.where(np.diff(self.T['MJD'][valid_index] * 24) > threshold_hours)[0] + 1
-            if not break_index:
+            if break_index.size == 0:
                 # only one group
                 self.T['attitude_group'][valid_index] = 0
             else:
+                if break_index.size > 1:
+                    raise NotImplementedError
                 for index in break_index:
                     self.T['attitude_group'][valid_index[0:index]] = 0
                     self.T['attitude_group'][valid_index[index:]] = 1
@@ -290,19 +292,35 @@ def apply_focal_plane_calibration(obs_collection, apertures_to_calibrate, calibr
     -------
 
     """
+    calibrated_data['EPOCH_mjd'] = Time(calibrated_data['EPOCH'], format='isot').mjd
 
     for tmp_j, tmp_aperture_name in enumerate(obs_collection.T['AperName']):
         if tmp_aperture_name in apertures_to_calibrate:
-            calibration_index = np.where((np.int(obs_collection.T['PROPOSID'][tmp_j]) == np.array(calibrated_data['PROPOSID'])) &
-                                         (np.array(calibrated_data['AperName']) == tmp_aperture_name) &
-                                         (np.int(obs_collection.T['EPOCHNUMBER'][tmp_j]) == np.array(calibrated_data['EPOCHNUMBER']).astype(np.int)))[0]
+
+
+            candidate_index = np.where((np.array(calibrated_data['PROPOSID']) == np.int(obs_collection.T['PROPOSID'][tmp_j])) &
+                                       (np.array(calibrated_data['AperName']) == tmp_aperture_name))[0]
+
+
+            calibration_index = np.array([candidate_index[np.argmin(np.abs(obs_collection.T['EXPSTART'][tmp_j] - calibrated_data['EPOCH_mjd'][candidate_index]))]])
+            # calibration_index = np.where((np.int(obs_collection.T['PROPOSID'][tmp_j]) == np.array(calibrated_data['PROPOSID'])) &
+            #                              (np.array(calibrated_data['AperName']) == tmp_aperture_name) &
+            #                              (obs_collection.T['EPOCHNUMBER'][tmp_j] == np.array(calibrated_data['EPOCHNUMBER']).astype(np.str)))[0]
             print('+++++++++++ APPLYING CALIBRATION +++++++++++')
+            if calibration_index.size == 0:
+                # raise ValueError('No matching calibration found.')
+                print('No matching calibration found. Try next EPOCHNUMBER')
+                continue
+
             if verbose:
+                print('Calibration data found with delta_EXPSTART = {:2.3f} h '.format((obs_collection.T['EXPSTART'][tmp_j] - calibrated_data['EPOCH_mjd'][calibration_index[0]])*24))
                 print('Applying calibration as mean of')
                 calibrated_data['DATE-OBS PROGRAM_VISIT APERTURE CHIP {0}_V2Ref ' \
                                     '{0}_V3Ref {0}_V3IdlYAngle'.format(field_selection).split()][calibration_index].pprint()
 
-            alignment_parameter_set = obs_collection.T['align_params'][calibration_index[0]]  # 'default' or 'hst_fgs'
+
+            # alignment_parameter_set = obs_collection.T['align_params'][calibration_index[0]]  # 'default' or 'hst_fgs'
+            alignment_parameter_set = calibrated_data['align_params'][calibration_index[0]]  # 'default' or 'hst_fgs'
             for key, attribute in alignment_parameter_mapping[alignment_parameter_set].items():
                 mean_value = np.mean(calibrated_data['{}_{}'.format(field_selection, attribute)][calibration_index])
                 print('Setting {} from {:2.3f} to {:2.3f} (average of {} samples) for alignment_reference_aperture '
@@ -1360,9 +1378,10 @@ def determine_focal_plane_alignment(obs_collection, parameters):
         if obs_collection.observatory == 'JWST':
             # this is for multi-epoch trending of focal plane alignment data.
             # TODO fix the setting of this parameter
-            calibrated_data['EPOCHNUMBER'] = 0
+            calibrated_data['EPOCHNUMBER'] = '0'
         else:
             calibrated_data['EPOCHNUMBER'] = [str(s)[0] for s in calibrated_data['VISIT']]
+            # calibrated_data['EPOCHNUMBER'] = calibrated_data['group_id']
         calibrated_obs_collection = pickle.load(open(os.path.join(result_dir, 'alignment_results_{}.pkl'.format(temp_seed)), "rb"))
 
 
@@ -1390,6 +1409,7 @@ def determine_focal_plane_alignment(obs_collection, parameters):
         obs_collection = copy.deepcopy(obs_collection_original)
 
         obs_collection.T['EPOCHNUMBER'] = [s.split('_')[1][0] for s in obs_collection.T['PROGRAM_VISIT']]
+        # obs_collection.T['EPOCHNUMBER'] = obs_collection.T['group_id']
 
         # update aperture alignment parameters based on previous alignment
         if apply_fpa_calibration:
@@ -1412,6 +1432,19 @@ def determine_focal_plane_alignment(obs_collection, parameters):
                 # especially relevant for FGS
                 selected_group_ids = np.unique(np.array(
                     obs_collection.T[np.where((obs_collection.T['AperName'] == exclusive_aperture_name))]['group_id']))
+
+                # check that every group has at least two different apertures
+                good_group_indices = []
+                for group_index, group_id in enumerate(selected_group_ids):
+                    obs_indexes = np.where((obs_collection.T['group_id'] == group_id))[0]
+                    n_unique_apertures = np.unique(obs_collection.T['AperName'][obs_indexes]).size
+                    if n_unique_apertures < 2:
+                        print('group {} contains insufficient number of apertures ({}). Skipping.'.format(group_id, n_unique_apertures))
+                    else:
+                        good_group_indices.append(group_index)
+
+                selected_group_ids = selected_group_ids[np.array(good_group_indices)]
+
                 selected_observations = np.where(np.in1d(obs_collection.T['group_id'], selected_group_ids))[0]
                 discarded_observations = np.setdiff1d(np.arange(len(obs_collection.T)), selected_observations)
 
@@ -1420,35 +1453,6 @@ def determine_focal_plane_alignment(obs_collection, parameters):
 
             for group_id in selected_group_ids:
                 obs_indexes = np.where((obs_collection.T['group_id'] == group_id))[0]
-
-                if 0:
-                    alignment_reference_observation_index = \
-                    np.where((obs_collection.T['group_id'] == group_id) & (obs_collection.T['alignment_reference'] == 1))[0]
-                    if (np.ndim(alignment_reference_observation_index) == 1):
-                        # catch case where alignment_reference_observation_index is an array of
-                        # several elements
-                        # Here we select the first one (arbitrarily).
-                        alignment_reference_observation_index = alignment_reference_observation_index[0]
-
-                    alignment_reference_obs = obs_collection.observations[alignment_reference_observation_index]
-
-                    # attitude_defining_aperture = siaf.apertures[attitude_defining_aperture_name]
-
-                    # For cameras, there are usually two exposures that could be used to determine
-                    # the attitude.
-                    # Here we select the first one (arbitrarily).
-
-                    attitude_defining_observation_index = np.where((obs_collection.T['group_id'] == group_id) & (
-                        obs_collection.T['AperName'] == attitude_defining_aperture_name))[0]
-                    if (np.ndim(attitude_defining_observation_index) == 1):
-                        attitude_defining_observation_index = attitude_defining_observation_index[0]
-                    attitude_defining_obs = obs_collection.observations[attitude_defining_observation_index]
-
-                    # ensure that the reference observation is being processed first
-                    obs_indexes_list = obs_indexes.tolist()
-                    obs_indexes_list.remove(alignment_reference_observation_index)
-                    obs_indexes_list.insert(0, alignment_reference_observation_index)
-                    obs_indexes = np.array(obs_indexes_list)
 
                 print('=' * 100)
                 print('processing GROUP {}'.format(group_id))
@@ -1610,6 +1614,9 @@ def determine_focal_plane_alignment(obs_collection, parameters):
             username = os.getlogin()
             timestamp = Time.now()
 
+
+
+
             obs_collection.T['VISIT'] = [s.split('_')[1] for s in obs_collection.T['PROGRAM_VISIT']]
             obs_collection.T['align_ref_aperture'] = alignment_reference_aperture_name
             obs_collection.T['attitude_def_aperture'] = attitude_defining_aperture_name
@@ -1694,9 +1701,6 @@ def enhance_result_table(obs_collection):
     zero_array = np.zeros(len(table))
 
     # # homogenize offset and clocking parameter naming across HST cameras and guiders
-    # table['hst_fgs'] = (table['TELESCOP']=='HST') & (np.array([True if 'FGS' in a else False for a in table['APERTURE']]))
-    # table['align_params'] = ['hst_fgs' if a else 'default' for a in table['hst_fgs']]
-
     for key, attribute in alignment_parameter_mapping['default'].items():
         table[key] = [getattr(observations[j].aperture, alignment_parameter_mapping[table['align_params'][j]][key]) for j in range(n_obs)]
         table['corrected_{}'.format(key)] = [getattr(observations[j].aperture, '{}_corrected'.format(alignment_parameter_mapping[table['align_params'][j]][key])) for j in range(n_obs)]
@@ -1929,7 +1933,10 @@ def evaluate(obs_collection, parameters, make_summary_figures=True, save_plot=Tr
             unique_aperture_names_all = np.unique(obs_collection.T['AperName'])
 
             for i in range(obs_collection.n_observations):
-                visit_group_index = [j for j in range(len(visit_groups)) if obs_collection.T['group_id'][i] in visit_groups[j]][0]
+                try:
+                    visit_group_index = [j for j in range(len(visit_groups)) if obs_collection.T['group_id'][i] in visit_groups[j]][0]
+                except IndexError:
+                    visit_group_index = 0
                 obs = obs_collection.observations[i]
                 use_pseudo_fgs = False
                 if (obs.aperture.AperName == alignment_reference_aperture_name) | (use_pseudo_fgs):
