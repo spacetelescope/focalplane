@@ -64,9 +64,17 @@ def crossmatch_fpa_data(parameters):
 
     """
     print('\nCROSSMATCH OF FPA DATA WITH REFERENCE CATALOG')
+
+    default_parameters = {'file_pattern': '*.fits',
+                          'camera_names': []}
+
+    for key, value in default_parameters.items():
+        if key not in parameters.keys():
+            parameters[key] = value
+
     if (not os.path.isfile(parameters['pickle_file']) or parameters['overwrite']):
 
-        fpa_data_files = glob.glob(os.path.join(parameters['standardized_data_dir'], '*.fits'))
+        fpa_data_files = glob.glob(os.path.join(parameters['standardized_data_dir'], parameters['file_pattern']))
         verbose_figures = parameters['verbose_figures']
         save_plot = parameters['save_plot']
         plot_dir = parameters['plot_dir']
@@ -83,6 +91,9 @@ def crossmatch_fpa_data(parameters):
         restrict_analysis_to_these_apertures = parameters['restrict_analysis_to_these_apertures']
 
         observations = []
+
+        print('*'*100)
+        print('Running crossmatch procedure on {} input files'.format(len(fpa_data_files)))
         for j, f in enumerate(fpa_data_files):
 
             print('=' * 40)
@@ -963,6 +974,9 @@ def jwst_camera_fpa_data(data_dir, pattern, standardized_data_dir, parameters,
     if len(file_list) == 0:
         raise RuntimeError('No data found')
 
+    print('*'*100)
+    print('Extracting sources from {} JWST files:'.format(len(file_list)))
+
     for f in file_list:
         # if 'jw01088002001_01201_00004_g2_cal' not in f:
         # if 'jw01087001001_01101_00031_nis_cal' not in f:
@@ -1073,6 +1087,7 @@ def jwst_camera_fpa_data(data_dir, pattern, standardized_data_dir, parameters,
 
             mean, median, std = sigma_clipped_stats(data, sigma=3.0)
 
+            name_seed = '{}_{}'.format(os.path.basename(f).split('.')[0], parameters['naming_tag'])
 
             import corner
             if parameters['use_epsf'] is False:
@@ -1125,10 +1140,10 @@ def jwst_camera_fpa_data(data_dir, pattern, standardized_data_dir, parameters,
                     dao_extracted_sources = daofind(data - median)
 
                     print('Initial source extraction: {} sources'.format(len(dao_extracted_sources)))
+
                     if 1:
                         corner_plot_file = os.path.join(extracted_sources_dir,
-                                                        '{}_corner_extraction.pdf'.format(
-                                                            os.path.basename(f).split('.')[0]))
+                                                        '{}_corner_extraction.pdf'.format(name_seed))
                         selected_columns = [col for col in dao_extracted_sources.colnames if
                                             col not in 'npix sky'.split()]
                         samples = np.array([dao_extracted_sources[col] for col in selected_columns])
@@ -1209,14 +1224,19 @@ def jwst_camera_fpa_data(data_dir, pattern, standardized_data_dir, parameters,
                     # np.where(dq.data != 0)
                     nddata = NDData(data=data-median_val, uncertainty=weight_uncertainty)#, uncertainty_type='weights')
 
+                # use_weights_for_epsf = True
+                if parameters['use_weights_for_epsf']:
+                    mask = dq != 0  # bool mask is True for bad values
+                    nddata = NDData(data=data - median_val, mask=mask)
 
 
                 from photutils.psf import extract_stars
                 stars = extract_stars(nddata, stars_tbl, size=epsf_psf_size_pix)
 
 
-                # use_weights_for_epsf = True
-                if parameters['use_weights_for_epsf']:
+
+
+                if 0:
                     dqs = extract_stars(NDData(data=dq), stars_tbl, size=epsf_psf_size_pix)
                     # print([np.any(dqs[i].data!=0) for i in range(len(dqs))] )
                     # # dqs[0].data[]
@@ -1225,10 +1245,11 @@ def jwst_camera_fpa_data(data_dir, pattern, standardized_data_dir, parameters,
                         # star.weights = 1./np.
                         mask_index = np.where(dqs[j].data!=0)
                         star.weights[mask_index] = 0
+                        # if mask_index[0].size > 50:
+                        #     print(star.weights)
 
 
-                        # 1/0
-
+                # 1/0
 
                 import matplotlib.pyplot as plt
                 from astropy.visualization import simple_norm
@@ -1245,14 +1266,16 @@ def jwst_camera_fpa_data(data_dir, pattern, standardized_data_dir, parameters,
                 # pl.show()
                 pl.title('{} sample stars for epsf'.format(header_info['APERTURE']))
                 psf_plot_file = os.path.join(extracted_sources_dir,
-                                                '{}_sample_psfs.pdf'.format(
-                                                    os.path.basename(f).split('.')[0]))
+                                                '{}_sample_psfs.pdf'.format(name_seed))
                 pl.savefig(psf_plot_file)
 
                 from photutils import EPSFBuilder
                 from photutils.centroids import centroid_com
-                epsf_builder = EPSFBuilder(oversampling=4, maxiters=3, recentering_maxiters=5, recentering_func=centroid_com)
-                # epsf_builder = EPSFBuilder(oversampling=4, progress_bar=True)
+
+                #################### EPSF BUILDING  ####################
+
+                # epsf_builder = EPSFBuilder(oversampling=4, maxiters=10, recentering_maxiters=20, recentering_func=centroid_com, progress_bar=True)
+                epsf_builder = EPSFBuilder(oversampling=4, progress_bar=True)
                 print('Building epsf ...')
                 # epsf, fitted_stars = epsf_builder(stars)
                 epsf, fitted_stars = epsf_builder(stars)
@@ -1263,12 +1286,9 @@ def jwst_camera_fpa_data(data_dir, pattern, standardized_data_dir, parameters,
                 pl.colorbar()
                 # pl.show()
                 pl.title('{} epsf using {} stars'.format(header_info['APERTURE'], len(stars_tbl)))
-                epsf_plot_file = os.path.join(extracted_sources_dir,
-                                                '{}_epsf.pdf'.format(
-                                                    os.path.basename(f).split('.')[0]))
+                epsf_plot_file = os.path.join(extracted_sources_dir, '{}_epsf.pdf'.format(name_seed))
                 pl.savefig(epsf_plot_file)
 
-                # 1/0
                 from photutils.psf import IntegratedGaussianPRF, DAOGroup
                 from photutils.background import MMMBackground, MADStdBackgroundRMS
                 from astropy.modeling.fitting import LevMarLSQFitter
