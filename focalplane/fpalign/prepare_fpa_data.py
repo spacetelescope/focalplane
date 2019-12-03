@@ -85,6 +85,9 @@ def crossmatch_fpa_data(parameters):
         observations = []
         for j, f in enumerate(fpa_data_files):
 
+            # if 'FPA_data_HST_SUPERFGS2_FGS2_chip0_F583W_2019-04-09T06-39-23_fdyw24-fgs2.fits' not in f:
+            #     continue
+
             print('=' * 40)
             fpa_data = Table.read(f)
 
@@ -636,8 +639,8 @@ def crossmatch_fpa_data(parameters):
 
         pickle.dump((observations), open(parameters['pickle_file'], "wb"))
     else:
+        print('Loading pickled file {}'.format(parameters['pickle_file']))
         observations = pickle.load(open(parameters['pickle_file'], "rb"))
-        print('Loaded pickled file {}'.format(parameters['pickle_file']))
 
     return observations
 
@@ -662,13 +665,20 @@ def correct_dva(obs_collection, parameters):
     verbose = parameters['verbose']
 
     for group_id in np.unique(obs_collection.T['group_id']):
+        if verbose:
+            print('Working on group {}'.format(group_id))
         obs_indexes = np.where((obs_collection.T['group_id'] == group_id))[0]
         # obs_collection.T[obs_indexes].pprint()
 
         superfgs_observation_index = \
             np.where((obs_collection.T['group_id'] == group_id) & (
             obs_collection.T['INSTRUME'] == 'SUPERFGS'))[0]
+        if superfgs_observation_index.size == 0:
+            print('No FGS data in this group. Skipping.')
+            continue
         superfgs_obs = obs_collection.observations[superfgs_observation_index][0]
+
+
 
         camera_observation_index = \
             np.where((obs_collection.T['group_id'] == group_id) & (
@@ -821,6 +831,11 @@ def hst_camera_fpa_data(data_dir, pattern, onepass_extension, standardized_data_
         # get header
         primary_header = fits.getheader(f, ext=0)
         first_ext_header = fits.getheader(f, ext=1)
+
+        # STS (10/22/2019): Check if header keyword QUALITY includes the value GSFAIL; if so, ignore data set.
+        quality = primary_header['QUALITY']
+        if 'GSFAIL' in quality:
+            continue
 
         # collect meta data
         telescope = primary_header['TELESCOP']
@@ -1520,6 +1535,20 @@ def hst_guider_fpa_data(reduced_data_dir, mast_data_dir, pattern, standardized_d
         if verbose:
             print('Reading Guider data file: {}'.format(f))
             d.pprint()
+
+        # remove entries with `failed` or non-nominal guide-star data
+        for colname in 'X_sd   Y_sd  Xd_sd  Yd_sd  Xs_sd  Ys_sd'.split():
+            bad_index = np.where(d[colname] == '******')[0]
+            if len(bad_index) != 0:
+                print('Found non-nominal guide-star data. removing {} observations.'.format(len(bad_index)))
+                d.remove_rows(bad_index)
+
+            # convert column to float because it may have been read as string
+            d[colname] = d[colname].astype(np.float)
+
+        if len(d) == 0:
+            print('No valid FGS data in this file. Skipping.\n')
+            continue
 
         # loop over individual FGS frames
         for j, obs_id in enumerate(d['OBS_ID'].data):
