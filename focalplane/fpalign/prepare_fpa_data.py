@@ -64,9 +64,17 @@ def crossmatch_fpa_data(parameters):
 
     """
     print('\nCROSSMATCH OF FPA DATA WITH REFERENCE CATALOG')
+
+    default_parameters = {'file_pattern': '*.fits',
+                          'camera_names': []}
+
+    for key, value in default_parameters.items():
+        if key not in parameters.keys():
+            parameters[key] = value
+
     if (not os.path.isfile(parameters['pickle_file']) or parameters['overwrite']):
 
-        fpa_data_files = glob.glob(os.path.join(parameters['standardized_data_dir'], '*.fits'))
+        fpa_data_files = glob.glob(os.path.join(parameters['standardized_data_dir'], parameters['file_pattern']))
         verbose_figures = parameters['verbose_figures']
         save_plot = parameters['save_plot']
         plot_dir = parameters['plot_dir']
@@ -83,6 +91,9 @@ def crossmatch_fpa_data(parameters):
         restrict_analysis_to_these_apertures = parameters['restrict_analysis_to_these_apertures']
 
         observations = []
+
+        print('*'*100)
+        print('Running crossmatch procedure on {} input files'.format(len(fpa_data_files)))
         for j, f in enumerate(fpa_data_files):
 
             # if 'FPA_data_HST_SUPERFGS2_FGS2_chip0_F583W_2019-04-09T06-39-23_fdyw24-fgs2.fits' not in f:
@@ -978,6 +989,9 @@ def jwst_camera_fpa_data(data_dir, pattern, standardized_data_dir, parameters,
     if len(file_list) == 0:
         raise RuntimeError('No data found')
 
+    print('*'*100)
+    print('Extracting sources from {} JWST files:'.format(len(file_list)))
+
     for f in file_list:
         # if 'jw01088002001_01201_00004_g2_cal' not in f:
         # if 'jw01087001001_01101_00031_nis_cal' not in f:
@@ -1060,11 +1074,6 @@ def jwst_camera_fpa_data(data_dir, pattern, standardized_data_dir, parameters,
 
         mask_extreme_slope_values = False
         parameters['maximum_slope_value'] = 1000.
-        # parameters['use_epsf'] = True
-        # parameters['show_extracted_sources'] = True
-
-        # parameters['use_DAOStarFinder_for_epsf'] = False
-        # parameters['use_DAOStarFinder_for_epsf'] = True
 
         if (not os.path.isfile(extracted_sources_file)) or (overwrite_source_extraction):
             show_figures = False
@@ -1088,6 +1097,7 @@ def jwst_camera_fpa_data(data_dir, pattern, standardized_data_dir, parameters,
 
             mean, median, std = sigma_clipped_stats(data, sigma=3.0)
 
+            name_seed = '{}_{}'.format(os.path.basename(f).split('.')[0], parameters['naming_tag'])
 
             import corner
             if parameters['use_epsf'] is False:
@@ -1123,8 +1133,9 @@ def jwst_camera_fpa_data(data_dir, pattern, standardized_data_dir, parameters,
 
 
             else:
-                detection_fwhm =2.0
-                detection_threshold = parameters['dao_detection_threshold'] * std
+                # 1/0
+                detection_fwhm = parameters['detection_fwhm'][header_info['INSTRUME']]
+                detection_threshold = parameters['dao_detection_threshold'][header_info['INSTRUME']] * std
 
                 epsf_psf_size_pix = parameters['epsf_psf_size_pix']
 
@@ -1133,17 +1144,14 @@ def jwst_camera_fpa_data(data_dir, pattern, standardized_data_dir, parameters,
                 # EPSF builder
                 if parameters['use_DAOStarFinder_for_epsf']: # use DAOStarFinder for EPSF star list
 
-                    # daofind = DAOStarFinder(fwhm=2.0, threshold=20. * std)
-                    # daofind = DAOStarFinder(fwhm=2.0, threshold=5. * std)
                     daofind = DAOStarFinder(fwhm=detection_fwhm, threshold=detection_threshold)
-                    # daofind = DAOStarFinder(fwhm=2.0, threshold=3. * std)
                     dao_extracted_sources = daofind(data - median)
 
                     print('Initial source extraction: {} sources'.format(len(dao_extracted_sources)))
+
                     if 1:
                         corner_plot_file = os.path.join(extracted_sources_dir,
-                                                        '{}_corner_extraction.pdf'.format(
-                                                            os.path.basename(f).split('.')[0]))
+                                                        '{}_corner_extraction.pdf'.format(name_seed))
                         selected_columns = [col for col in dao_extracted_sources.colnames if
                                             col not in 'npix sky'.split()]
                         samples = np.array([dao_extracted_sources[col] for col in selected_columns])
@@ -1153,8 +1161,8 @@ def jwst_camera_fpa_data(data_dir, pattern, standardized_data_dir, parameters,
                         # 1 / 0
 
                     dao_extracted_sources = select_isolated_sources(dao_extracted_sources, nearest_neighbour_distance_threshold_pix)
-                    dao_extracted_sources = dao_extracted_sources[(np.abs(dao_extracted_sources['roundness1'])<parameters['roundness_threshold'])
-                                                          & (dao_extracted_sources['sharpness']>parameters['sharpness_threshold'])]
+                    dao_extracted_sources = dao_extracted_sources[(np.abs(dao_extracted_sources['roundness1'])<parameters['roundness_threshold'][header_info['INSTRUME']])
+                                                          & (dao_extracted_sources['sharpness']>parameters['sharpness_threshold'][header_info['INSTRUME']])]
                     print('Sharpness/roundness + isolation cut: {} sources'.format(len(dao_extracted_sources)))
 
                     if 1:
@@ -1162,8 +1170,8 @@ def jwst_camera_fpa_data(data_dir, pattern, standardized_data_dir, parameters,
                             np.where(dao_extracted_sources['flux'] <= 0)[0])
                         # flux_threshold_percentile = 50
                         # flux_threshold = np.percentile(dao_extracted_sources['flux'], flux_threshold_percentile)
-                        flux_threshold_lower = np.percentile(dao_extracted_sources['flux'], parameters['flux_threshold_percentile_lower'])
-                        flux_threshold_upper = np.percentile(dao_extracted_sources['flux'], parameters['flux_threshold_percentile_upper'])
+                        flux_threshold_lower = np.percentile(dao_extracted_sources['flux'], parameters['flux_threshold_percentile_lower'][header_info['INSTRUME']])
+                        flux_threshold_upper = np.percentile(dao_extracted_sources['flux'], parameters['flux_threshold_percentile_upper'][header_info['INSTRUME']])
                         # dao_extracted_sources.remove_rows(np.where(dao_extracted_sources['flux'] < flux_threshold)[0])
                         dao_extracted_sources.remove_rows(np.where(dao_extracted_sources['flux'] < flux_threshold_lower)[0])
                         dao_extracted_sources.remove_rows(np.where(dao_extracted_sources['flux'] > flux_threshold_upper)[0])
@@ -1182,7 +1190,7 @@ def jwst_camera_fpa_data(data_dir, pattern, standardized_data_dir, parameters,
                     print('Initial source extraction using find_peaks: {} sources'.format(len(extracted_sources)))
 
 
-
+                # 1/0
 
                 # for j in range(len(extracted_sources)):
 
@@ -1206,7 +1214,6 @@ def jwst_camera_fpa_data(data_dir, pattern, standardized_data_dir, parameters,
 
                 # stars_tbl = stars_tbl[0:5]
                 # stars_tbl = stars_tbl[[0]]
-                print('Using {} stars to build epsf'.format(len(stars_tbl)))
 
                 from astropy.nddata import NDData
                 nddata = NDData(data=data-median_val)
@@ -1224,14 +1231,33 @@ def jwst_camera_fpa_data(data_dir, pattern, standardized_data_dir, parameters,
                     # np.where(dq.data != 0)
                     nddata = NDData(data=data-median_val, uncertainty=weight_uncertainty)#, uncertainty_type='weights')
 
+                # use_weights_for_epsf = True
+                if parameters['use_weights_for_epsf']:
+                    mask = dq != 0  # bool mask is True for bad values
+                    nddata = NDData(data=data - median_val, mask=mask)
 
 
                 from photutils.psf import extract_stars
                 stars = extract_stars(nddata, stars_tbl, size=epsf_psf_size_pix)
 
 
-                # use_weights_for_epsf = True
-                if parameters['use_weights_for_epsf']:
+
+                n_dq_threshold = parameters['discard_stars_based_on_dq'][header_info['INSTRUME']]
+                if n_dq_threshold is not None:
+                    dqs = extract_stars(NDData(data=dq), stars_tbl, size=epsf_psf_size_pix)
+                    discard_index = []
+                    for j,dq in enumerate(dqs):
+                        mask_index = np.where(dq.data!=0)[0]
+                        if len(mask_index) > n_dq_threshold:
+                            discard_index.append(j)
+
+                    print('Removing {} stars with too many bad pixel DQ values'.format(len(discard_index)))
+                    stars_tbl.remove_rows(discard_index)
+
+                    stars = extract_stars(nddata, stars_tbl, size=epsf_psf_size_pix)
+
+
+                if 0:
                     dqs = extract_stars(NDData(data=dq), stars_tbl, size=epsf_psf_size_pix)
                     # print([np.any(dqs[i].data!=0) for i in range(len(dqs))] )
                     # # dqs[0].data[]
@@ -1240,10 +1266,11 @@ def jwst_camera_fpa_data(data_dir, pattern, standardized_data_dir, parameters,
                         # star.weights = 1./np.
                         mask_index = np.where(dqs[j].data!=0)
                         star.weights[mask_index] = 0
+                        # if mask_index[0].size > 50:
+                        #     print(star.weights)
 
 
-                        # 1/0
-
+                print('Using {} stars to build epsf'.format(len(stars_tbl)))
 
                 import matplotlib.pyplot as plt
                 from astropy.visualization import simple_norm
@@ -1260,14 +1287,16 @@ def jwst_camera_fpa_data(data_dir, pattern, standardized_data_dir, parameters,
                 # pl.show()
                 pl.title('{} sample stars for epsf'.format(header_info['APERTURE']))
                 psf_plot_file = os.path.join(extracted_sources_dir,
-                                                '{}_sample_psfs.pdf'.format(
-                                                    os.path.basename(f).split('.')[0]))
+                                                '{}_sample_psfs.pdf'.format(name_seed))
                 pl.savefig(psf_plot_file)
 
                 from photutils import EPSFBuilder
                 from photutils.centroids import centroid_com
-                epsf_builder = EPSFBuilder(oversampling=4, maxiters=3, recentering_maxiters=5, recentering_func=centroid_com)
-                # epsf_builder = EPSFBuilder(oversampling=4, progress_bar=True)
+
+                #################### EPSF BUILDING  ####################
+
+                # epsf_builder = EPSFBuilder(oversampling=4, maxiters=10, recentering_maxiters=20, recentering_func=centroid_com, progress_bar=True)
+                epsf_builder = EPSFBuilder(oversampling=4, progress_bar=True)
                 print('Building epsf ...')
                 # epsf, fitted_stars = epsf_builder(stars)
                 epsf, fitted_stars = epsf_builder(stars)
@@ -1277,19 +1306,17 @@ def jwst_camera_fpa_data(data_dir, pattern, standardized_data_dir, parameters,
                 pl.imshow(epsf.data, norm=norm, origin='lower', cmap='viridis')
                 pl.colorbar()
                 # pl.show()
-                pl.title('{} epsf using {} stars'.format(header_info['APERTURE'], len(stars_tbl)))
-                epsf_plot_file = os.path.join(extracted_sources_dir,
-                                                '{}_epsf.pdf'.format(
-                                                    os.path.basename(f).split('.')[0]))
+                filter_string = header_info['instrument_pupil'] if 'F'==header_info['instrument_pupil'][0] else header_info['instrument_filter']
+                pl.title('{} {} epsf using {} stars'.format(header_info['APERTURE'], filter_string, len(stars_tbl)))
+                epsf_plot_file = os.path.join(extracted_sources_dir, '{}_epsf.pdf'.format(name_seed))
                 pl.savefig(epsf_plot_file)
 
-                # 1/0
                 from photutils.psf import IntegratedGaussianPRF, DAOGroup
                 from photutils.background import MMMBackground, MADStdBackgroundRMS
                 from astropy.modeling.fitting import LevMarLSQFitter
                 from astropy.stats import gaussian_sigma_to_fwhm
 
-                sigma_psf = 2.0
+                sigma_psf = detection_fwhm
                 image = data
                 # bkgrms = MADStdBackgroundRMS()
                 # std = bkgrms(image)
@@ -1300,10 +1327,11 @@ def jwst_camera_fpa_data(data_dir, pattern, standardized_data_dir, parameters,
                                           # peakmax=parameters['maximum_slope_value'])
 
                 daofind2 = DAOStarFinder(threshold=detection_threshold, fwhm=detection_fwhm,
-                                         roundhi=parameters['roundness_threshold'], sharplo=parameters['sharpness_threshold'])
+                                         roundhi=parameters['roundness_threshold'][header_info['INSTRUME']], sharplo=parameters['sharpness_threshold'][header_info['INSTRUME']])
 
 
-                daogroup = DAOGroup(2.0 * sigma_psf * gaussian_sigma_to_fwhm)
+                # daogroup = DAOGroup(2.0 * sigma_psf * gaussian_sigma_to_fwhm)
+                daogroup = DAOGroup(2.0 * detection_fwhm)
                 mmm_bkg = MMMBackground()
                 # fitter = LevMarLSQFitter()
                 # psf_model = IntegratedGaussianPRF(sigma=sigma_psf)
@@ -1313,7 +1341,7 @@ def jwst_camera_fpa_data(data_dir, pattern, standardized_data_dir, parameters,
                                                                 group_maker=daogroup,
                                                                 bkg_estimator=mmm_bkg,
                                                                 psf_model=psf_model,
-                                                                fitter=LevMarLSQFitter(), niters=1,
+                                                                fitter=LevMarLSQFitter(), niters=parameters['final_extraction_niters'],
                                                                 fitshape=(11, 11), aperture_radius=5,)
                                                                 # extra_output_cols=['roundness1', 'sharpness', 'roundness2'])
 
