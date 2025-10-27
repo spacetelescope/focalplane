@@ -1,5 +1,4 @@
 [![Build Status](https://travis-ci.org/spacetelescope/focalplane.svg?branch=master)](https://travis-ci.org/spacetelescope/focalplane)
-[![Documentation Status](https://readthedocs.org/projects/focalplane/badge/?version=latest)](https://focalplane.readthedocs.io/en/latest/?badge=latest)
 [![PyPI version](https://badge.fury.io/py/focalplane.svg)](https://badge.fury.io/py/focalplane)
 [![PyPI - License](https://img.shields.io/pypi/l/Django.svg)](https://github.com/spacetelescope/focalplane/blob/master/LICENSE.md)
 [![DOI](https://zenodo.org/badge/208096894.svg)](https://zenodo.org/badge/latestdoi/208096894)
